@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>OSRS Flip Analyzer (Local)</title>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; background:#0f172a; color:#e5e7eb; }
+    h1 { font-size: 24px; }
+    input { margin: 10px 0; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #334155; padding: 8px; text-align: left; }
+    th { background: #1e293b; }
+    tr:hover { background:#1e293b; }
+    .container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background:#020617; padding:15px; border-radius:12px; box-shadow:0 10px 20px rgba(0,0,0,.4); }
+  </style>
+</head>
+<body>
+  <h1>📈 OSRS Flip Analyzer (Local)</h1>
+  <p>Upload your <b>flips.csv</b></p>
+
+  <input type="file" id="fileInput" accept=".csv" />
+
+  <div class="container">
+    <div class="card">
+      <h3>💰 Most Profitable Items</h3>
+      <table id="profitTable">
+        <thead>
+          <tr>
+            <th>Item</th>
+            <th>Total Profit</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>📊 Analytics</h3>
+      <p><b>Completed flips:</b> <span id="completed">-</span></p>
+      <p><b>Active flips:</b> <span id="active">-</span></p>
+      <hr />
+      <p><b>Total Profit:</b> <span id="totalProfit">-</span></p>
+      <p><b>Average Profit / Flip:</b> <span id="avgProfit">-</span></p>
+      <hr />
+      <p><b>Best Single Flip:</b> <span id="bestFlip">-</span></p>
+      <p><b>Profit from Best Flip:</b> <span id="bestFlipProfit">-</span></p>
+      <hr />
+      <p><b>Most Profitable Day:</b> <span id="bestDay">-</span></p>
+      <p><b>Profit on Best Day:</b> <span id="bestDayProfit">-</span></p>
+    </div>
+  </div>
+
+<script>
+let rawData = [];
+
+const fileInput = document.getElementById('fileInput');
+fileInput.addEventListener('change', () => {
+  Papa.parse(fileInput.files[0], {
+    header: true,
+    skipEmptyLines: true,
+    complete: res => {
+      rawData = res.data.map(r => ({
+        ...r,
+        Profit: Number(r.Profit || 0),
+        sellTime: r['Last sell time'] && r['Last sell time'] !== 'NaN' ? new Date(r['Last sell time']) : null
+      }));
+      buildProfitTable();
+      calculateAnalytics();
+    }
+  });
+});
+
+function buildProfitTable() {
+  const map = {};
+  rawData
+    .filter(r => r.Status !== 'BUYING')
+    .forEach(r => {
+      map[r.Item] = (map[r.Item] || 0) + r.Profit;
+    });
+
+  const tbody = document.querySelector('#profitTable tbody');
+  tbody.innerHTML = '';
+
+  Object.entries(map)
+    .sort((a,b) => b[1] - a[1])
+    .forEach(([item, profit]) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td>${item}</td><td>${profit.toLocaleString()}</td>`;
+      tbody.appendChild(tr);
+    });
+}
+
+function calculateAnalytics() {
+  const completed = rawData.filter(r => r.Status !== 'BUYING');
+  const active = rawData.filter(r => r.Status === 'BUYING');
+
+  document.getElementById('completed').textContent = completed.length;
+  document.getElementById('active').textContent = active.length;
+
+  const total = completed.reduce((s,r)=>s+r.Profit,0);
+  document.getElementById('totalProfit').textContent = total.toLocaleString();
+  document.getElementById('avgProfit').textContent = completed.length ? Math.round(total / completed.length).toLocaleString() : 0;
+
+  if (completed.length) {
+    const best = completed.reduce((a,b)=>b.Profit>a.Profit?b:a);
+    document.getElementById('bestFlip').textContent = best.Item;
+    document.getElementById('bestFlipProfit').textContent = best.Profit.toLocaleString();
+  }
+
+  const dayMap = {};
+  completed.forEach(r => {
+    if (!r.sellTime) return;
+    const day = r.sellTime.toISOString().split('T')[0];
+    dayMap[day] = (dayMap[day] || 0) + r.Profit;
+  });
+
+  const bestDay = Object.entries(dayMap).sort((a,b)=>b[1]-a[1])[0];
+  if (bestDay) {
+    document.getElementById('bestDay').textContent = bestDay[0];
+    document.getElementById('bestDayProfit').textContent = bestDay[1].toLocaleString();
+  }
+}
+</script>
+</body>
+</html>
